@@ -30,7 +30,7 @@ jobs:
           docker push pawong/batch:latest
 
       - name: Deploy to remote server
-        uses: appleboy/ssh-action@v0.1.6
+        uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ubuntu
