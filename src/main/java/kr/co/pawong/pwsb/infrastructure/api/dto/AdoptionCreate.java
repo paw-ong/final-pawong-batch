@@ -40,6 +40,12 @@ public class AdoptionCreate {
     private String specialMark; // 특징
     private String careRegNo; // 보호소 번호
     private LocalDateTime updTm; // 수정일
+    // batch에서 writer가 끝난 후에 Listener에서 메시지를 발행하는데, 이때 id를 알아야 해서 추가했습니다.. ㅜㅜ
+    private Long rdbId = null;
+
+    public void initRdbId(Long rdbId) {
+        this.rdbId = rdbId;
+    }
 
     /**
      * ProcessState, NoticeEdt 값에 따라 ActiveState를 갱신하는 메서드

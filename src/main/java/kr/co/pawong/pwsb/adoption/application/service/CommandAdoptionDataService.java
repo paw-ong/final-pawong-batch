@@ -12,9 +12,7 @@ import kr.co.pawong.pwsb.adoption.application.port.out.AdoptionDataQueryPort;
 import kr.co.pawong.pwsb.adoption.domain.model.Adoption;
 import kr.co.pawong.pwsb.adoption.enums.ActiveState;
 import kr.co.pawong.pwsb.infrastructure.api.dto.AdoptionCreate;
-import kr.co.pawong.pwsb.lostPost.application.port.in.PublishCreatedLostAnimalUseCase;
 import kr.co.pawong.pwsb.lostPost.application.port.out.LostAnimalEngineCommandPort;
-import kr.co.pawong.pwsb.lostPost.enums.PostType;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -29,14 +27,13 @@ public class CommandAdoptionDataService implements CommandAdoptionDataUseCase {
     private final AdoptionAiPort adoptionAiPort;
     private final LostAnimalEngineCommandPort lostAnimalEngineCommandPort;
 
-    private final PublishCreatedLostAnimalUseCase publishCreatedLostAnimalUseCase;
-
     // Adoption 정보 저장
     @Transactional
     @Override
     public void saveAdoptions(List<AdoptionCreate> adoptionCreates) {
         int updatedCount = 0;
         int insertedCount = 0;
+        int publishLostAdoptionCount = 0;
 
         for (AdoptionCreate adoptionCreate : adoptionCreates) {
             // 중복 데이터 확인
@@ -56,9 +53,10 @@ public class CommandAdoptionDataService implements CommandAdoptionDataUseCase {
                     if (adoption.getActiveState() == ActiveState.MISSING
                             && updatedAdoption.getActiveState() != ActiveState.MISSING) {
                         lostAnimalEngineCommandPort.deleteLostAnimalByAdoptionId(adoption.getAdoptionId());
-                    } else {
-                        // MISSING 동물의 경우 메시지 발행
-                        publishMissingAdoption(adoption.getAdoptionId(), updatedAdoption);
+                    } else if (updatedAdoption.getActiveState() == ActiveState.MISSING) {
+                        // MISSING 동물의 경우
+                        adoptionCreate.initRdbId(adoption.getAdoptionId());
+                        publishLostAdoptionCount++;
                     }
                 }
             } else {
@@ -68,29 +66,15 @@ public class CommandAdoptionDataService implements CommandAdoptionDataUseCase {
                 long newId = adoptionDataCommandPort.saveAdoption(newAdoption);
                 insertedCount++;
 
-                // MISSING 동물의 경우 메시지 발행
-                publishMissingAdoption(newId, newAdoption);
+                // MISSING 동물의 경우
+                if (newAdoption.getActiveState() == ActiveState.MISSING) {
+                    adoptionCreate.initRdbId(newId);
+                    publishLostAdoptionCount++;
+                }
             }
         }
 
-        log.info("데이터 처리 완료: {} 건 삽입, {} 건 업데이트", insertedCount, updatedCount);
-    }
-
-    private void publishMissingAdoption(long id, Adoption adoption) {
-        if (adoption.getActiveState() == ActiveState.MISSING) {
-            // 특징 문자열 생성
-            String textFeature = String.join(" ",
-                    adoption.getColorCd(),
-                    adoption.getKindNm(),
-                    adoption.getUpKindNm().name());
-            // 구조 동물 추가됐다는 메시지 발행
-            publishCreatedLostAnimalUseCase.publishCreatedLostAnimal(
-                    id,
-                    PostType.FOSTER,
-                    textFeature,
-                    adoption.getPopfile1()
-            );
-        }
+        log.info("데이터 처리 완료: {} 건 삽입, {} 건 업데이트 / LostAdoption 메시지 {} 건", insertedCount, updatedCount, publishLostAdoptionCount);
     }
 
     // Adoption 데이터 업데이트 여부 확인

@@ -17,4 +17,4 @@ spring:
       ack-mode: record
 kafka:
   topic:
-    rescued-animal-created: dev.pawong.rescued-animal.created
+    rescued-animal-created: "dev.pawong.rescued-animal.created"
