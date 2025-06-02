@@ -10,7 +10,11 @@ import kr.co.pawong.pwsb.adoption.application.port.out.AdoptionAiPort;
 import kr.co.pawong.pwsb.adoption.application.port.out.AdoptionDataCommandPort;
 import kr.co.pawong.pwsb.adoption.application.port.out.AdoptionDataQueryPort;
 import kr.co.pawong.pwsb.adoption.domain.model.Adoption;
+import kr.co.pawong.pwsb.adoption.enums.ActiveState;
 import kr.co.pawong.pwsb.infrastructure.api.dto.AdoptionCreate;
+import kr.co.pawong.pwsb.lostPost.application.port.in.PublishCreatedLostAnimalUseCase;
+import kr.co.pawong.pwsb.lostPost.application.port.out.LostAnimalEngineCommandPort;
+import kr.co.pawong.pwsb.lostPost.enums.PostType;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -23,6 +27,9 @@ public class CommandAdoptionDataService implements CommandAdoptionDataUseCase {
     private final AdoptionDataCommandPort adoptionDataCommandPort;
     private final AdoptionDataQueryPort adoptionDataQueryPort;
     private final AdoptionAiPort adoptionAiPort;
+    private final LostAnimalEngineCommandPort lostAnimalEngineCommandPort;
+
+    private final PublishCreatedLostAnimalUseCase publishCreatedLostAnimalUseCase;
 
     // Adoption 정보 저장
     @Transactional
@@ -45,17 +52,45 @@ public class CommandAdoptionDataService implements CommandAdoptionDataUseCase {
 
                     adoptionDataCommandPort.updateAdoption(updatedAdoption);
                     updatedCount++;
+
+                    if (adoption.getActiveState() == ActiveState.MISSING
+                            && updatedAdoption.getActiveState() != ActiveState.MISSING) {
+                        lostAnimalEngineCommandPort.deleteLostAnimalByAdoptionId(adoption.getAdoptionId());
+                    } else {
+                        // MISSING 동물의 경우 메시지 발행
+                        publishMissingAdoption(adoption.getAdoptionId(), updatedAdoption);
+                    }
                 }
             } else {
                 // 새로운 데이터 저장
                 Adoption newAdoption = Adoption.from(adoptionCreate);
 
-                adoptionDataCommandPort.saveAdoption(newAdoption);
+                long newId = adoptionDataCommandPort.saveAdoption(newAdoption);
                 insertedCount++;
+
+                // MISSING 동물의 경우 메시지 발행
+                publishMissingAdoption(newId, newAdoption);
             }
         }
 
         log.info("데이터 처리 완료: {} 건 삽입, {} 건 업데이트", insertedCount, updatedCount);
+    }
+
+    private void publishMissingAdoption(long id, Adoption adoption) {
+        if (adoption.getActiveState() == ActiveState.MISSING) {
+            // 특징 문자열 생성
+            String textFeature = String.join(" ",
+                    adoption.getColorCd(),
+                    adoption.getKindNm(),
+                    adoption.getUpKindNm().name());
+            // 구조 동물 추가됐다는 메시지 발행
+            publishCreatedLostAnimalUseCase.publishCreatedLostAnimal(
+                    id,
+                    PostType.FOSTER,
+                    textFeature,
+                    adoption.getPopfile1()
+            );
+        }
     }
 
     // Adoption 데이터 업데이트 여부 확인
