@@ -37,7 +37,7 @@ public class CommandAdoptionEngineService implements CommandAdoptionEngineUseCas
 
             // 임베딩할 내용이 없는 경우 null 반환
             if (combinedField.isBlank()) {
-                log.warn("Adoption ID {}: 임베딩할 필드가 없습니다.", adoption.getAdoptionId());
+//                log.info("Adoption ID {}: 임베딩할 필드가 없습니다.", adoption.getAdoptionId());
                 return null;
             }
 
