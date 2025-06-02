@@ -4,6 +4,7 @@ import co.elastic.clients.elasticsearch._types.ElasticsearchException;
 import kr.co.pawong.pwsb.adoption.application.port.out.dto.AdoptionEsDto;
 import kr.co.pawong.pwsb.adoption.application.service.dto.AdoptionApi;
 import kr.co.pawong.pwsb.adoption.domain.model.Adoption;
+import kr.co.pawong.pwsb.batch.listener.RescuedAnimalPublishListener;
 import kr.co.pawong.pwsb.batch.listener.StepListener;
 import kr.co.pawong.pwsb.batch.processor.AdoptionAiProcessor;
 import kr.co.pawong.pwsb.batch.processor.AdoptionApiProcessor;
@@ -34,6 +35,7 @@ import org.springframework.transaction.PlatformTransactionManager;
 public class BatchConfig {
 
      private final StepListener stepListener;
+     private final RescuedAnimalPublishListener rescuedAnimalPublishListener;
 
     @Bean
     public Job adoptionApiJob(JobRepository jobRepository,
@@ -64,6 +66,7 @@ public class BatchConfig {
                 .retry(TransientDataAccessException.class)
                 .retryLimit(3)
                 .startLimit(3)
+                .listener(rescuedAnimalPublishListener)
                 .listener(stepListener)
                 .build();
     }
